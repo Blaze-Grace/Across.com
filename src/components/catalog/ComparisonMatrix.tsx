@@ -3,6 +3,7 @@ import { TOOLS } from '../../data/tools';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useWaitlist } from '../../context/WaitlistContext';
 import { isMobileViewer } from '../../utils/device';
+import { trackEvent } from '../../utils/analytics';
 
 export const ComparisonMatrix: React.FC = () => {
   const { isINR } = useCurrency();
@@ -151,6 +152,7 @@ export const ComparisonMatrix: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => {
+                      trackEvent('tool_click', tool.slug);
                       if (isMobileViewer()) {
                         e.preventDefault();
                         showDesktopOnlyAlert(tool.slug);

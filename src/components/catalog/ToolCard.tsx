@@ -4,6 +4,7 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useWaitlist } from '../../context/WaitlistContext';
 import { getToolGradient } from '../../utils/toolStyles';
 import { isMobileViewer } from '../../utils/device';
+import { trackEvent } from '../../utils/analytics';
 
 interface ToolCardProps {
   tool: SaaSTool;
@@ -15,6 +16,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, index = 0 }) => {
   const { showDesktopOnlyAlert } = useWaitlist();
 
   const handleClick = () => {
+    trackEvent('tool_click', tool.slug);
     if (isMobileViewer()) {
       showDesktopOnlyAlert(tool.slug);
       return;

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SaaSTool } from '../../types';
 import { useCurrency } from '../../context/CurrencyContext';
+import { trackEvent } from '../../utils/analytics';
 
 interface RoiCalculatorProps {
   tool: SaaSTool;
@@ -10,6 +11,14 @@ export const RoiCalculator: React.FC<RoiCalculatorProps> = ({ tool }) => {
   const { isINR, formatPrice } = useCurrency();
   const [vol, setVol] = useState<number>(tool.roiDefault);
   const [hours, setHours] = useState<number>(10);
+  const trackedSandboxRef = useRef(false);
+
+  const recordSandboxRun = () => {
+    if (!trackedSandboxRef.current) {
+      trackedSandboxRef.current = true;
+      trackEvent('sandbox_run', tool.slug);
+    }
+  };
 
   // Compute ROI
   const hoursSavedPerMonth = Math.round(hours * 3.2);
@@ -52,7 +61,10 @@ export const RoiCalculator: React.FC<RoiCalculatorProps> = ({ tool }) => {
               min={10}
               max={tool.roiMax}
               value={vol}
-              onChange={(e) => setVol(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                setVol(parseInt(e.target.value, 10));
+                recordSandboxRun();
+              }}
               style={{ width: '100%', accentColor: 'var(--blue-primary)' }}
             />
           </div>
@@ -67,7 +79,10 @@ export const RoiCalculator: React.FC<RoiCalculatorProps> = ({ tool }) => {
               min={2}
               max={40}
               value={hours}
-              onChange={(e) => setHours(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                setHours(parseInt(e.target.value, 10));
+                recordSandboxRun();
+              }}
               style={{ width: '100%', accentColor: 'var(--blue-primary)' }}
             />
           </div>

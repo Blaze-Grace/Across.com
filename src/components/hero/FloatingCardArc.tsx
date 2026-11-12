@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useWaitlist } from '../../context/WaitlistContext';
 import { isMobileViewer } from '../../utils/device';
+import { trackEvent } from '../../utils/analytics';
 
 export const FloatingCardArc: React.FC = () => {
   const { openWaitlist, showDesktopOnlyAlert } = useWaitlist();
@@ -20,6 +21,7 @@ export const FloatingCardArc: React.FC = () => {
   };
 
   const handleOpenTool = (slug: string) => {
+    trackEvent('tool_click', slug);
     if (isMobileViewer()) {
       showDesktopOnlyAlert(slug);
       return;

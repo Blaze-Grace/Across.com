@@ -10,6 +10,7 @@ import { ToolDetailPage } from './pages/ToolDetailPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SaasOnDemandPage } from './pages/SaasOnDemandPage';
 import { TOOLS } from './data/tools';
+import { trackEvent } from './utils/analytics';
 
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'tool' | 'admin' | 'saas-on-demand'>('landing');
@@ -48,6 +49,11 @@ export const App: React.FC = () => {
     };
 
     parseUrl();
+    const initialView = new URLSearchParams(window.location.search).get('view');
+    if (initialView !== 'admin' && !sessionStorage.getItem('across_visit_tracked')) {
+      sessionStorage.setItem('across_visit_tracked', '1');
+      trackEvent('visit');
+    }
     window.addEventListener('popstate', parseUrl);
     return () => window.removeEventListener('popstate', parseUrl);
   }, []);
