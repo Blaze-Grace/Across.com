@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TOOLS } from '../data/tools';
-import { WaitlistEntry, SaasOnDemandRequest } from '../types';
+import { WaitlistEntry, SaasOnDemandRequest, VipCodeRecord } from '../types';
 
 interface AdminDashboardProps {
   onBackToLanding: () => void;
@@ -22,12 +22,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Active Tab: 'overview' | 'saas-demand' | 'waitlist'
-  const [activeTab, setActiveTab] = useState<'overview' | 'saas-demand' | 'waitlist'>('overview');
+  // Active Tab: 'overview' | 'saas-demand' | 'waitlist' | 'vip-codes'
+  const [activeTab, setActiveTab] = useState<'overview' | 'saas-demand' | 'waitlist' | 'vip-codes'>('overview');
 
   // Real-time Data
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [saasRequests, setSaasRequests] = useState<SaasOnDemandRequest[]>([]);
+  const [vipCodes, setVipCodes] = useState<VipCodeRecord[]>([]);
+  const [vipStats, setVipStats] = useState({ total: 0, unused: 0, used: 0, expired: 0, revoked: 0 });
   const [analytics, setAnalytics] = useState<AnalyticsPayload>({
     pageVisits: 0,
     toolClicks: {},
@@ -42,6 +44,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
   const [saasSearch, setSaasSearch] = useState('');
   const [waitlistSearch, setWaitlistSearch] = useState('');
   const [waitlistToolFilter, setWaitlistToolFilter] = useState('All');
+  const [vipStatusFilter, setVipStatusFilter] = useState<'All' | 'Unused' | 'Used' | 'Expired'>('All');
+  const [vipToolFilter, setVipToolFilter] = useState('All');
+  const [vipSearch, setVipSearch] = useState('');
 
   // Fetch all worldwide submissions from central backend API
   const fetchWorldwideData = async () => {
@@ -72,6 +77,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
       if (aRes.ok) {
         const aData = await aRes.json();
         setAnalytics(aData);
+      }
+
+      // 4. Fetch VIP Invitation Codes (Protected by admin passcode header)
+      const adminToken = sessionStorage.getItem('across_admin_token') || '';
+      const vipRes = await fetch('/api/admin/vip-codes', {
+        headers: { 'x-admin-passcode': adminToken }
+      });
+      if (vipRes.ok) {
+        const vipData = await vipRes.json();
+        setVipCodes(vipData.codes || []);
+        if (vipData.stats) setVipStats(vipData.stats);
       }
 
       setLastSync(new Date().toLocaleTimeString());
@@ -180,6 +196,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
     setWaitlist(prev => prev.filter(w => w.id !== id));
     try {
       await fetch(`/api/waitlist/${id}`, { method: 'DELETE' });
+    } catch (err) {}
+  };
+
+  // Revoke Unused VIP Code
+  const handleRevokeVipCode = async (id: string) => {
+    if (!window.confirm('Revoke this unused VIP invitation code?')) return;
+    const adminToken = sessionStorage.getItem('across_admin_token') || '';
+    try {
+      const res = await fetch(`/api/admin/vip-codes/${id}/revoke`, {
+        method: 'POST',
+        headers: { 'x-admin-passcode': adminToken }
+      });
+      if (res.ok) {
+        await fetchWorldwideData();
+      }
     } catch (err) {}
   };
 
@@ -666,6 +697,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
           >
             📋 Early Access Waitlist ({waitlist.length})
           </button>
+
+          <button
+            onClick={() => setActiveTab('vip-codes')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '9999px',
+              border: 'none',
+              background: activeTab === 'vip-codes' ? '#7C3AED' : '#FFFFFF',
+              color: activeTab === 'vip-codes' ? '#FFFFFF' : 'var(--ink)',
+              fontWeight: 800,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: activeTab === 'vip-codes' ? '0 4px 12px rgba(124, 58, 237, 0.3)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            🎟️ VIP Access Management ({vipStats.total})
+          </button>
         </div>
 
         {/* ==================================================== */}
@@ -1125,6 +1177,207 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* TAB 4: VIP ACCESS MANAGEMENT */}
+        {/* ==================================================== */}
+        {activeTab === 'vip-codes' && (
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: 'var(--radius-card)',
+            padding: '28px',
+            boxShadow: 'var(--shadow-subtle)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--ink)' }}>
+                  🎟️ VIP Access Management
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--slate)', marginTop: '2px' }}>
+                  Monitor tool-specific 2-minute invitation codes, redemptions, and expirations in real time.
+                </p>
+              </div>
+            </div>
+
+            {/* VIP Summary KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Total Generated</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ink)', marginTop: '4px' }}>{vipStats.total}</div>
+              </div>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase' }}>Unused Active</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#1D4ED8', marginTop: '4px' }}>{vipStats.unused}</div>
+              </div>
+              <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#047857', textTransform: 'uppercase' }}>Redeemed (Used)</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#059669', marginTop: '4px' }}>{vipStats.used}</div>
+              </div>
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#B91C1C', textTransform: 'uppercase' }}>Expired / Revoked</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#DC2626', marginTop: '4px' }}>{vipStats.expired + vipStats.revoked}</div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {(['All', 'Unused', 'Used', 'Expired'] as const).map((statusOpt) => (
+                  <button
+                    key={statusOpt}
+                    onClick={() => setVipStatusFilter(statusOpt)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '9999px',
+                      border: vipStatusFilter === statusOpt ? 'none' : '1px solid #CBD5E1',
+                      background: vipStatusFilter === statusOpt ? '#0F172A' : '#FFFFFF',
+                      color: vipStatusFilter === statusOpt ? '#FFFFFF' : 'var(--slate)',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {statusOpt}
+                  </button>
+                ))}
+              </div>
+
+              <select
+                value={vipToolFilter}
+                onChange={(e) => setVipToolFilter(e.target.value)}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  background: '#FFFFFF',
+                  outline: 'none'
+                }}
+              >
+                <option value="All">All Tools</option>
+                {TOOLS.map((t) => (
+                  <option key={t.slug} value={t.slug}>{t.name}</option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                placeholder="Search code, tool, or waitlist contact..."
+                value={vipSearch}
+                onChange={(e) => setVipSearch(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: '210px',
+                  padding: '9px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {/* VIP Codes Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '880px' }}>
+                <thead>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748B' }}>
+                    <th style={{ padding: '12px 14px' }}>Invitation Code</th>
+                    <th style={{ padding: '12px 14px' }}>Associated Tool</th>
+                    <th style={{ padding: '12px 14px' }}>Generated</th>
+                    <th style={{ padding: '12px 14px' }}>Expires</th>
+                    <th style={{ padding: '12px 14px' }}>Status</th>
+                    <th style={{ padding: '12px 14px' }}>Redeemed At</th>
+                    <th style={{ padding: '12px 14px' }}>Waitlist Submission</th>
+                    <th style={{ padding: '12px 14px', textAlign: 'right' }}>Control</th>
+                  </tr>
+                </thead>
+                <tbody style={{ fontSize: '13px' }}>
+                  {vipCodes
+                    .filter((c) => {
+                      const matchesStatus = vipStatusFilter === 'All' || c.status === vipStatusFilter;
+                      const matchesTool = vipToolFilter === 'All' || c.toolSlug === vipToolFilter;
+                      const q = vipSearch.trim().toLowerCase();
+                      const matchesQ =
+                        !q ||
+                        c.codeMasked.toLowerCase().includes(q) ||
+                        c.toolName.toLowerCase().includes(q) ||
+                        (c.waitlistContact && c.waitlistContact.toLowerCase().includes(q));
+                      return matchesStatus && matchesTool && matchesQ;
+                    })
+                    .map((c) => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '13px 14px', fontFamily: 'ui-monospace, monospace', fontWeight: 800, color: 'var(--ink)' }}>
+                          {c.codeMasked}
+                        </td>
+                        <td style={{ padding: '13px 14px', fontWeight: 700, color: 'var(--slate)' }}>
+                          {c.toolName}
+                        </td>
+                        <td style={{ padding: '13px 14px', fontSize: '12px', color: '#64748B' }}>
+                          {new Date(c.createdAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '13px 14px', fontSize: '12px', color: '#64748B' }}>
+                          {new Date(c.expiresAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '13px 14px' }}>
+                          <span
+                            style={{
+                              padding: '3px 10px',
+                              borderRadius: '9999px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              background:
+                                c.status === 'Used'
+                                  ? '#ECFDF5'
+                                  : c.status === 'Unused'
+                                  ? '#EFF6FF'
+                                  : '#FEF2F2',
+                              color:
+                                c.status === 'Used'
+                                  ? '#059669'
+                                  : c.status === 'Unused'
+                                  ? '#1D4ED8'
+                                  : '#DC2626'
+                            }}
+                          >
+                            {c.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '13px 14px', fontSize: '12px', color: '#64748B' }}>
+                          {c.redeemedAt ? new Date(c.redeemedAt).toLocaleString() : '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', fontSize: '12.5px', color: 'var(--ink)', fontWeight: 600 }}>
+                          {c.waitlistContact || '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', textAlign: 'right' }}>
+                          {c.status === 'Unused' ? (
+                            <button
+                              onClick={() => handleRevokeVipCode(c.id)}
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid #FECACA',
+                                background: '#FEF2F2',
+                                color: '#DC2626',
+                                fontSize: '11.5px',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '11.5px', color: '#94A3B8' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

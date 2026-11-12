@@ -13,7 +13,7 @@ interface ToolCardProps {
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, index = 0 }) => {
   const { isINR } = useCurrency();
-  const { showDesktopOnlyAlert } = useWaitlist();
+  const { showDesktopOnlyAlert, openWaitlist } = useWaitlist();
 
   const handleClick = () => {
     trackEvent('tool_click', tool.slug);
@@ -222,22 +222,43 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, index = 0 }) => {
           </div>
         </div>
 
-        <button
-          className="btn-primary btn-explore"
-          style={{
-            padding: '8px 14px',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            borderRadius: '9999px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '5px',
-            flexShrink: 0,
-            whiteSpace: 'nowrap'
-          }}
-        >
-          Explore Tool <span className="btn-arrow" style={{ transition: 'transform 0.2s ease' }}>↗</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              trackEvent('tool_click', tool.slug);
+              openWaitlist(tool.slug);
+            }}
+            className="btn-lime"
+            style={{
+              padding: '8px 12px',
+              fontSize: '11.5px',
+              fontWeight: 800,
+              borderRadius: '9999px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Free Request
+          </button>
+
+          <button
+            type="button"
+            className="btn-primary btn-explore"
+            style={{
+              padding: '8px 12px',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              borderRadius: '9999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Explore <span className="btn-arrow" style={{ transition: 'transform 0.2s ease' }}>↗</span>
+          </button>
+        </div>
       </div>
     </div>
   );

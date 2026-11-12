@@ -5,6 +5,23 @@ const STORE_NAME = 'across-data';
 const WAITLIST_KEY = 'waitlist';
 const SAAS_DEMAND_KEY = 'saas_requests';
 const ANALYTICS_KEY = 'analytics';
+const VIP_CODES_KEY = 'vip_codes';
+const RATE_LIMIT_KEY = 'vip_rate_limits';
+
+const VIP_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const RATE_LIMIT_MAX = 15;
+
+const VALID_TOOLS: Record<string, string> = {
+  'converse-qa': 'Across ConverseQA',
+  'solo-report': 'Across SoloReport',
+  'review-flow': 'Across ReviewFlow',
+  'commit-track': 'Across CommitTrack',
+  'invoice-verify': 'Across InvoiceVerify',
+  'order-hub': 'Across OrderHub',
+  'ca-docflow': 'Across CA DocFlow',
+  'support-lens': 'Across SupportLens',
+};
 
 interface AnalyticsData {
   pageVisits: number;
@@ -16,12 +33,77 @@ interface AnalyticsData {
   };
 }
 
+interface VipCodeRecord {
+  id: string;
+  codeHash: string;
+  codeMasked: string;
+  toolSlug: string;
+  toolName: string;
+  status: 'Unused' | 'Used' | 'Expired' | 'Revoked';
+  createdAt: string;
+  expiresAt: string;
+  redeemedAt: string | null;
+  revokedAt: string | null;
+  waitlistId: string | null;
+  waitlistContact: string | null;
+}
+
 const DEFAULT_ANALYTICS: AnalyticsData = {
   pageVisits: 0,
   toolClicks: {},
   sandboxRuns: {},
   deviceStats: { desktop: 0, mobile: 0 },
 };
+
+async function hashVipCode(code: string): Promise<string> {
+  const bytes = new TextEncoder().encode(code.trim().toUpperCase());
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function maskVipCode(code: string): string {
+  const parts = code.split('-');
+  if (parts.length === 4) {
+    return `${parts[0]}-${parts[1]}-${parts[2]}-**${parts[3].slice(-2)}`;
+  }
+  return code.slice(0, 8) + '****';
+}
+
+function generateSecureVipCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const randPart = (len: number) => {
+    const bytes = new Uint8Array(len);
+    crypto.getRandomValues(bytes);
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      out += chars[bytes[i] % chars.length];
+    }
+    return out;
+  };
+  return `AC-VIP-${randPart(4)}-${randPart(4)}`;
+}
+
+function randomHex(byteLen: number): string {
+  const bytes = new Uint8Array(byteLen);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function syncExpiredCodes(codes: VipCodeRecord[]): boolean {
+  const now = Date.now();
+  let changed = false;
+  for (const c of codes) {
+    if (c.status === 'Unused' && now > new Date(c.expiresAt).getTime()) {
+      c.status = 'Expired';
+      changed = true;
+    }
+  }
+  return changed;
+}
 
 function getClientMeta(req: Request, context: Context) {
   const ip =
@@ -94,7 +176,132 @@ export default async (req: Request, context: Context) => {
       return Response.json({ success: true, message: 'All demo data has been purged successfully.' });
     }
 
-    // 3. SaaS on Demand API
+    // 3. VIP Code Generation & Status Check
+    if (path === '/api/vip-codes/generate' && method === 'POST') {
+      const { ip } = getClientMeta(req, context);
+      const now = Date.now();
+      const rateLimits = ((await store.get(RATE_LIMIT_KEY, { type: 'json' })) as Record<string, number[]>) || {};
+      const history = (rateLimits[ip] || []).filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+      if (history.length >= RATE_LIMIT_MAX) {
+        return Response.json(
+          { error: 'Too many VIP code requests. Please wait a few minutes and try again.' },
+          { status: 429 }
+        );
+      }
+      history.push(now);
+      rateLimits[ip] = history;
+      await store.setJSON(RATE_LIMIT_KEY, rateLimits);
+
+      const { toolSlug } = (await req.json()) as { toolSlug?: string };
+      if (!toolSlug || !VALID_TOOLS[toolSlug]) {
+        return Response.json({ error: 'Please select a valid Across tool.' }, { status: 400 });
+      }
+
+      const vipCodes = await readArray<VipCodeRecord>(store, VIP_CODES_KEY);
+      syncExpiredCodes(vipCodes);
+
+      let code = '';
+      let codeHash = '';
+      for (let attempt = 0; attempt < 10; attempt++) {
+        code = generateSecureVipCode();
+        codeHash = await hashVipCode(code);
+        if (!vipCodes.some((c) => c.codeHash === codeHash)) break;
+      }
+
+      const createdAt = new Date(now).toISOString();
+      const expiresAt = new Date(now + VIP_TTL_MS).toISOString();
+      const record: VipCodeRecord = {
+        id: 'vip_' + now + '_' + randomHex(2),
+        codeHash,
+        codeMasked: maskVipCode(code),
+        toolSlug,
+        toolName: VALID_TOOLS[toolSlug],
+        status: 'Unused',
+        createdAt,
+        expiresAt,
+        redeemedAt: null,
+        revokedAt: null,
+        waitlistId: null,
+        waitlistContact: null,
+      };
+
+      vipCodes.unshift(record);
+      await store.setJSON(VIP_CODES_KEY, vipCodes);
+
+      return Response.json({
+        success: true,
+        code,
+        toolSlug,
+        toolName: record.toolName,
+        createdAt,
+        expiresAt,
+        serverNow: createdAt,
+      });
+    }
+
+    if (path === '/api/vip-codes/check' && method === 'POST') {
+      const { code: rawCode } = (await req.json()) as { code?: string };
+      const normalized = String(rawCode || '').trim().toUpperCase();
+      if (!normalized) {
+        return Response.json({ valid: false, status: 'Invalid' }, { status: 400 });
+      }
+      const codeHash = await hashVipCode(normalized);
+      const vipCodes = await readArray<VipCodeRecord>(store, VIP_CODES_KEY);
+      const changed = syncExpiredCodes(vipCodes);
+      if (changed) await store.setJSON(VIP_CODES_KEY, vipCodes);
+
+      const record = vipCodes.find((c) => c.codeHash === codeHash);
+      if (!record) {
+        return Response.json({ valid: false, status: 'Invalid', serverNow: new Date().toISOString() });
+      }
+      return Response.json({
+        valid: record.status === 'Unused',
+        status: record.status,
+        toolSlug: record.toolSlug,
+        toolName: record.toolName,
+        createdAt: record.createdAt,
+        expiresAt: record.expiresAt,
+        serverNow: new Date().toISOString(),
+      });
+    }
+
+    if (path === '/api/admin/vip-codes' && method === 'GET') {
+      if (req.headers.get('x-admin-passcode') !== passcodeEnv) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const vipCodes = await readArray<VipCodeRecord>(store, VIP_CODES_KEY);
+      const changed = syncExpiredCodes(vipCodes);
+      if (changed) await store.setJSON(VIP_CODES_KEY, vipCodes);
+
+      const stats = {
+        total: vipCodes.length,
+        unused: vipCodes.filter((c) => c.status === 'Unused').length,
+        used: vipCodes.filter((c) => c.status === 'Used').length,
+        expired: vipCodes.filter((c) => c.status === 'Expired').length,
+        revoked: vipCodes.filter((c) => c.status === 'Revoked').length,
+      };
+      return Response.json({ codes: vipCodes, stats });
+    }
+
+    if (path.startsWith('/api/admin/vip-codes/') && path.endsWith('/revoke') && method === 'POST') {
+      if (req.headers.get('x-admin-passcode') !== passcodeEnv) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const id = decodeURIComponent(path.slice('/api/admin/vip-codes/'.length, -'/revoke'.length));
+      const vipCodes = await readArray<VipCodeRecord>(store, VIP_CODES_KEY);
+      syncExpiredCodes(vipCodes);
+      const record = vipCodes.find((c) => c.id === id);
+      if (!record) return Response.json({ error: 'Code not found' }, { status: 404 });
+      if (record.status !== 'Unused') {
+        return Response.json({ error: `Cannot revoke code with status: ${record.status}` }, { status: 400 });
+      }
+      record.status = 'Revoked';
+      record.revokedAt = new Date().toISOString();
+      await store.setJSON(VIP_CODES_KEY, vipCodes);
+      return Response.json({ success: true, record });
+    }
+
+    // 4. SaaS on Demand API
     if (path === '/api/saas-on-demand' && method === 'GET') {
       const data = await readArray(store, SAAS_DEMAND_KEY);
       return Response.json(data);
@@ -144,7 +351,7 @@ export default async (req: Request, context: Context) => {
       }
     }
 
-    // 4. Waitlist API
+    // 5. Waitlist API (With Atomic VIP Invitation Code Validation & Redemption)
     if (path === '/api/waitlist' && method === 'GET') {
       const data = await readArray(store, WAITLIST_KEY);
       return Response.json(data);
@@ -153,25 +360,142 @@ export default async (req: Request, context: Context) => {
     if (path === '/api/waitlist' && method === 'POST') {
       const { ip, device } = getClientMeta(req, context);
       const body = (await req.json()) as Record<string, unknown>;
+      const toolSlug = String(body.toolSlug || '');
+      const rawVipCode = String(body.code || body.vipCode || '').trim().toUpperCase();
+
+      if (!rawVipCode) {
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'MISSING_CODE',
+            error: 'VIP invitation code is required. Please generate your code to continue.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!toolSlug || !VALID_TOOLS[toolSlug]) {
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'INVALID_TOOL',
+            error: 'Please select a valid Across tool for early access.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const codeHash = await hashVipCode(rawVipCode);
+      const vipCodes = await readArray<VipCodeRecord>(store, VIP_CODES_KEY);
+      const expiredChanged = syncExpiredCodes(vipCodes);
+      const codeRecord = vipCodes.find((c) => c.codeHash === codeHash);
+
+      if (!codeRecord) {
+        if (expiredChanged) await store.setJSON(VIP_CODES_KEY, vipCodes);
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'INVALID_CODE',
+            error: 'Invalid VIP invitation code. Please check your code and try again.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (codeRecord.status === 'Revoked') {
+        if (expiredChanged) await store.setJSON(VIP_CODES_KEY, vipCodes);
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'REVOKED_CODE',
+            error: 'This invitation code has been revoked. Please generate a new one.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (codeRecord.status === 'Used') {
+        if (expiredChanged) await store.setJSON(VIP_CODES_KEY, vipCodes);
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'USED_CODE',
+            error: 'This invitation code has already been used.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (codeRecord.status === 'Expired' || Date.now() > new Date(codeRecord.expiresAt).getTime()) {
+        codeRecord.status = 'Expired';
+        await store.setJSON(VIP_CODES_KEY, vipCodes);
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'EXPIRED_CODE',
+            error: 'Your VIP invitation code has expired. Please generate a new one.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (codeRecord.toolSlug !== toolSlug) {
+        if (expiredChanged) await store.setJSON(VIP_CODES_KEY, vipCodes);
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'WRONG_TOOL',
+            error: `This invitation code is only valid for ${codeRecord.toolName}. Please generate a code for ${VALID_TOOLS[toolSlug]}.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Atomic distributed lock using Netlify Blobs `onlyIfNew`
+      const lockResult = await store.setJSON(
+        `vip_lock_${codeHash}`,
+        { lockedAt: new Date().toISOString() },
+        { onlyIfNew: true }
+      );
+      if (!lockResult.modified) {
+        return Response.json(
+          {
+            success: false,
+            errorCode: 'USED_CODE',
+            error: 'This invitation code has already been used.',
+          },
+          { status: 409 }
+        );
+      }
+
       const data = await readArray<Record<string, unknown> & { queueNumber?: number }>(store, WAITLIST_KEY);
       const nextQueue = (data[0]?.queueNumber || data.length || 140) + 1;
+      const entryId = (body.id as string) || 'wl_' + Date.now();
+      const nowIso = new Date().toISOString();
 
       const entry = {
-        id: (body.id as string) || 'wl_' + Date.now(),
+        id: entryId,
         name: (body.name as string) || null,
         email: (body.email as string) || null,
         phone: (body.phone as string) || null,
         instagram: (body.instagram as string) || null,
         preferredContact: (body.preferredContact as string) || 'email',
         role: (body.role as string) || 'Other',
-        code: (body.code as string) || null,
-        toolSlug: (body.toolSlug as string) || 'all',
+        vipCodeMasked: codeRecord.codeMasked,
+        toolSlug,
         queueNumber: nextQueue,
         device,
         ip,
         status: 'New',
-        createdAt: (body.createdAt as string) || new Date().toISOString(),
+        createdAt: (body.createdAt as string) || nowIso,
       };
+
+      codeRecord.status = 'Used';
+      codeRecord.redeemedAt = nowIso;
+      codeRecord.waitlistId = entryId;
+      codeRecord.waitlistContact = [body.name, body.email || body.phone || body.instagram].filter(Boolean).join(' • ');
+
+      await store.setJSON(VIP_CODES_KEY, vipCodes);
       data.unshift(entry);
       await store.setJSON(WAITLIST_KEY, data);
 
@@ -181,7 +505,7 @@ export default async (req: Request, context: Context) => {
         await store.setJSON(ANALYTICS_KEY, analytics);
       }
 
-      return Response.json({ success: true, entry, queueNumber: nextQueue });
+      return Response.json({ success: true, entry, queueNumber: nextQueue, isVip: true });
     }
 
     if (path.startsWith('/api/waitlist/')) {
@@ -203,7 +527,7 @@ export default async (req: Request, context: Context) => {
       }
     }
 
-    // 5. Telemetry & Analytics API
+    // 6. Telemetry & Analytics API
     if (path === '/api/analytics' && method === 'GET') {
       const [analytics, waitlist, saasRequests] = await Promise.all([
         readAnalytics(store),
@@ -244,4 +568,3 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
 };
-

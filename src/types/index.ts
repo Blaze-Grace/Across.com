@@ -25,6 +25,23 @@ export interface SaaSTool {
   roiRatePerHourUSD: number;
 }
 
+export type VipCodeStatus = 'Unused' | 'Used' | 'Expired' | 'Revoked';
+
+export interface VipCodeRecord {
+  id: string;
+  codeMasked: string;
+  codeHash: string;
+  toolSlug: string;
+  toolName: string;
+  status: VipCodeStatus;
+  createdAt: string;
+  expiresAt: string;
+  redeemedAt?: string | null;
+  revokedAt?: string | null;
+  waitlistId?: string | null;
+  waitlistContact?: string | null;
+}
+
 export interface WaitlistEntry {
   id: string;
   name?: string;
@@ -34,6 +51,7 @@ export interface WaitlistEntry {
   preferredContact?: 'email' | 'phone' | 'instagram';
   role: string;
   code?: string;
+  vipCodeMasked?: string;
   toolSlug: string;
   queueNumber: number;
   createdAt: string;

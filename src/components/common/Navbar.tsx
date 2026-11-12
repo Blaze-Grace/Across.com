@@ -3,7 +3,7 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useWaitlist } from '../../context/WaitlistContext';
 
 interface NavbarProps {
-  currentView?: 'landing' | 'tool' | 'admin' | 'saas-on-demand';
+  currentView?: 'landing' | 'tool' | 'admin' | 'saas-on-demand' | 'vip-access';
   onNavigateHome?: () => void;
   onNavigateAdmin?: () => void;
 }

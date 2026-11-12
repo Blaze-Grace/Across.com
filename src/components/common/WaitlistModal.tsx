@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWaitlist } from '../../context/WaitlistContext';
 import { TOOLS } from '../../data/tools';
 import { getToolGradient } from '../../utils/toolStyles';
@@ -11,38 +11,55 @@ export const WaitlistModal: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [instagram, setInstagram] = useState('');
   const [role, setRole] = useState('Solo Consultant / Independent');
+  const [toolSlug, setToolSlug] = useState<string>(TOOLS[0].slug);
   const [code, setCode] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ queueNumber: number; isVip: boolean } | null>(null);
 
+  useEffect(() => {
+    if (selectedToolSlug && selectedToolSlug !== 'all') {
+      setToolSlug(selectedToolSlug);
+    } else {
+      setToolSlug(TOOLS[0].slug);
+    }
+    setErrorMsg('');
+  }, [selectedToolSlug, isOpen]);
+
   if (!isOpen) return null;
 
-  const tool = selectedToolSlug && selectedToolSlug !== 'all'
-    ? TOOLS.find(t => t.slug === selectedToolSlug)
-    : null;
+  const isSpecificTool = Boolean(selectedToolSlug && selectedToolSlug !== 'all');
+  const tool = TOOLS.find(t => t.slug === toolSlug) || TOOLS[0];
 
-  const title = tool ? tool.name : 'Across SaaS Suite';
-  const icon = tool ? tool.icon : '⚡';
-  const gradient = getToolGradient(tool?.slug);
+  const title = isSpecificTool ? tool.name : 'Across SaaS Suite';
+  const icon = isSpecificTool ? tool.icon : '⚡';
+  const gradient = getToolGradient(isSpecificTool ? tool.slug : undefined);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
+
     if (!name.trim()) {
-      alert('Please enter your name.');
+      setErrorMsg('Please enter your name.');
       return;
     }
     if (preferredContact === 'email' && (!email.trim() || !email.includes('@'))) {
-      alert('Please enter a valid email address.');
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
     if (preferredContact === 'phone' && phone.trim().length < 7) {
-      alert('Please enter a valid phone number.');
+      setErrorMsg('Please enter a valid phone number.');
       return;
     }
     if (preferredContact === 'instagram' && !instagram.trim()) {
-      alert('Please enter your Instagram handle.');
+      setErrorMsg('Please enter your Instagram handle.');
       return;
     }
+    if (!code.trim()) {
+      setErrorMsg('VIP invitation code is required. Please generate your code to continue.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await submitWaitlist({
@@ -52,9 +69,16 @@ export const WaitlistModal: React.FC = () => {
         instagram: preferredContact === 'instagram' ? instagram.trim() : instagram.trim() || undefined,
         preferredContact,
         role,
+        toolSlug,
         code: code.trim().toUpperCase()
       });
-      setResult({ queueNumber: res.queueNumber, isVip: res.isVip });
+
+      if (!res.success) {
+        setErrorMsg(res.error || 'Unable to verify VIP invitation code.');
+        return;
+      }
+
+      setResult({ queueNumber: res.queueNumber || 1, isVip: Boolean(res.isVip) });
     } finally {
       setSubmitting(false);
     }
@@ -68,6 +92,7 @@ export const WaitlistModal: React.FC = () => {
     setInstagram('');
     setPreferredContact('email');
     setCode('');
+    setErrorMsg('');
     closeWaitlist();
   };
 
@@ -168,7 +193,32 @@ export const WaitlistModal: React.FC = () => {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
+              {!isSpecificTool && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '5px', color: 'var(--ink)' }}>
+                    Select Tool <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <select
+                    value={toolSlug}
+                    onChange={(e) => setToolSlug(e.target.value)}
+                    className="modal-select"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '14px',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
+                  >
+                    {TOOLS.map((t) => (
+                      <option key={t.slug} value={t.slug}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '5px', color: 'var(--ink)' }}>
                   Your Name <span style={{ color: '#EF4444' }}>*</span>
@@ -309,27 +359,101 @@ export const WaitlistModal: React.FC = () => {
                 </select>
               </div>
 
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '5px', color: 'var(--ink)' }}>
-                  Early Access Code <span style={{ fontWeight: 500, color: 'var(--slate-light)' }}>(Optional)</span>
-                </label>
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px', gap: '8px', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink)' }}>
+                    VIP Invitation Code <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <a
+                    href="?view=vip-access"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      color: 'var(--blue-primary)',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    Get Your VIP Code ↗
+                  </a>
+                </div>
                 <input
                   type="text"
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="e.g. VIP2026"
+                  onChange={(e) => {
+                    setCode(e.target.value.toUpperCase());
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="AC-VIP-XXXX-YYYY"
+                  required
                   className="modal-input"
                   style={{
                     width: '100%',
                     padding: '12px 14px',
                     borderRadius: '10px',
-                    border: '1px solid #CBD5E1',
+                    border: errorMsg ? '1.5px solid #EF4444' : '1px solid #CBD5E1',
                     fontSize: '14px',
                     outline: 'none',
-                    letterSpacing: '0.05em'
+                    letterSpacing: '0.06em',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    textTransform: 'uppercase'
                   }}
                 />
+                <div style={{
+                  marginTop: '7px',
+                  fontSize: '11.5px',
+                  color: 'var(--slate)',
+                  lineHeight: 1.45,
+                  background: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '9px',
+                  padding: '8px 10px'
+                }}>
+                  An invitation code is required to request early access. Don&apos;t have one?{' '}
+                  <a
+                    href="?view=vip-access"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--blue-primary)', fontWeight: 800, textDecoration: 'underline' }}
+                  >
+                    Generate your free VIP code here ↗
+                  </a>
+                </div>
               </div>
+
+              {errorMsg && (
+                <div
+                  role="alert"
+                  style={{
+                    marginBottom: '16px',
+                    padding: '11px 13px',
+                    borderRadius: '10px',
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#DC2626',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    lineHeight: 1.5
+                  }}
+                >
+                  <div>{errorMsg}</div>
+                  <a
+                    href="?view=vip-access"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '4px',
+                      color: '#B91C1C',
+                      fontWeight: 800,
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Open VIP Code Generator ↗
+                  </a>
+                </div>
+              )}
 
               <button
                 type="submit"

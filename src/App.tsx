@@ -9,11 +9,12 @@ import { LandingPage } from './pages/LandingPage';
 import { ToolDetailPage } from './pages/ToolDetailPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SaasOnDemandPage } from './pages/SaasOnDemandPage';
+import { VipGeneratorPage } from './pages/VipGeneratorPage';
 import { TOOLS } from './data/tools';
 import { trackEvent } from './utils/analytics';
 
 export const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'landing' | 'tool' | 'admin' | 'saas-on-demand'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'tool' | 'admin' | 'saas-on-demand' | 'vip-access'>('landing');
   const [activeToolSlug, setActiveToolSlug] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,7 +23,11 @@ export const App: React.FC = () => {
       const view = params.get('view');
       const tool = params.get('tool');
 
-      if (view === 'admin') {
+      if (view === 'vip-access' || window.location.pathname === '/vip') {
+        setCurrentView('vip-access');
+        setActiveToolSlug(null);
+        document.title = 'Get Your VIP Access — Across Early Access Code Generator';
+      } else if (view === 'admin') {
         setCurrentView('admin');
         setActiveToolSlug(null);
         document.title = 'Across Founder Demand Dashboard — Real-time Analytics';
@@ -87,7 +92,9 @@ export const App: React.FC = () => {
           />
 
           <div style={{ flex: 1 }}>
-            {currentView === 'admin' ? (
+            {currentView === 'vip-access' ? (
+              <VipGeneratorPage />
+            ) : currentView === 'admin' ? (
               <AdminDashboard onBackToLanding={navigateToHome} />
             ) : currentView === 'saas-on-demand' ? (
               <SaasOnDemandPage />

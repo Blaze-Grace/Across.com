@@ -9,7 +9,16 @@ export interface WaitlistSubmissionPayload {
   instagram?: string;
   preferredContact: 'email' | 'phone' | 'instagram';
   role: string;
-  code?: string;
+  code: string;
+  toolSlug?: string;
+}
+
+export interface WaitlistSubmissionResult {
+  success: boolean;
+  queueNumber?: number;
+  isVip?: boolean;
+  error?: string;
+  errorCode?: string;
 }
 
 interface WaitlistContextType {
@@ -17,7 +26,7 @@ interface WaitlistContextType {
   selectedToolSlug: string | null;
   openWaitlist: (toolSlug?: string) => void;
   closeWaitlist: () => void;
-  submitWaitlist: (payload: WaitlistSubmissionPayload) => Promise<{ success: boolean; queueNumber: number; isVip: boolean }>;
+  submitWaitlist: (payload: WaitlistSubmissionPayload) => Promise<WaitlistSubmissionResult>;
   waitlistCount: number;
   isDesktopAlertOpen: boolean;
   desktopAlertToolSlug: string | null;
@@ -61,10 +70,19 @@ export const WaitlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     instagram,
     preferredContact,
     role,
-    code
-  }: WaitlistSubmissionPayload) => {
-    const isVip = code === 'ACROSSVIP' || code === 'EARLYACCESS';
-    let assignedQueue = waitlistCount + 1;
+    code,
+    toolSlug
+  }: WaitlistSubmissionPayload): Promise<WaitlistSubmissionResult> => {
+    const resolvedToolSlug = toolSlug || (selectedToolSlug && selectedToolSlug !== 'all' ? selectedToolSlug : 'converse-qa');
+    const normalizedCode = code.trim().toUpperCase();
+
+    if (!normalizedCode) {
+      return {
+        success: false,
+        errorCode: 'MISSING_CODE',
+        error: 'VIP invitation code is required. Please generate your code to continue.'
+      };
+    }
 
     const entry: WaitlistEntry = {
       id: 'wl_' + Date.now(),
@@ -74,47 +92,52 @@ export const WaitlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       instagram: instagram?.trim() || undefined,
       preferredContact,
       role,
-      code,
-      toolSlug: selectedToolSlug || 'all',
-      queueNumber: assignedQueue,
+      code: normalizedCode,
+      toolSlug: resolvedToolSlug,
+      queueNumber: waitlistCount + 1,
       createdAt: new Date().toISOString()
     };
 
-    // Forward to central backend API for worldwide persistence
     try {
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry)
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.queueNumber) {
-          assignedQueue = data.queueNumber;
-        }
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        return {
+          success: false,
+          errorCode: data.errorCode || 'VALIDATION_ERROR',
+          error: data.error || 'Unable to verify VIP invitation code.'
+        };
       }
-    } catch (e) {
-      console.warn('API unreachable, saving locally:', e);
+
+      const assignedQueue = data.queueNumber || waitlistCount + 1;
+      setWaitlistCount(assignedQueue);
+      localStorage.setItem('across_waitlist_count', assignedQueue.toString());
+
+      const existing: WaitlistEntry[] = JSON.parse(localStorage.getItem('across_waitlist_entries') || '[]');
+      existing.unshift({ ...entry, queueNumber: assignedQueue });
+      localStorage.setItem('across_waitlist_entries', JSON.stringify(existing));
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
+      } catch {}
+
+      return { success: true, queueNumber: assignedQueue, isVip: true };
+    } catch {
+      return {
+        success: false,
+        errorCode: 'NETWORK_ERROR',
+        error: 'Server unreachable. Please ensure the backend is connected and try again.'
+      };
     }
-
-    setWaitlistCount(assignedQueue);
-    localStorage.setItem('across_waitlist_count', assignedQueue.toString());
-
-    // Save locally in cache
-    const existing: WaitlistEntry[] = JSON.parse(localStorage.getItem('across_waitlist_entries') || '[]');
-    existing.unshift({ ...entry, queueNumber: assignedQueue });
-    localStorage.setItem('across_waitlist_entries', JSON.stringify(existing));
-
-    // Trigger celebratory confetti
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
-    } catch (e) {}
-
-    return { success: true, queueNumber: assignedQueue, isVip };
   };
 
   return (
