@@ -23,3 +23,4 @@ export function trackEvent(type: 'visit' | 'tool_click' | 'sandbox_run', slug?: 
     // Ignore telemetry network errors
   }
 }
+

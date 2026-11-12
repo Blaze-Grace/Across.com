@@ -5,7 +5,7 @@ import { TOOLS } from '../../data/tools';
 import { getToolGradient } from '../../utils/toolStyles';
 
 export const DesktopOnlyAlertModal: React.FC = () => {
-  const { isDesktopAlertOpen, desktopAlertToolSlug, closeDesktopOnlyAlert } = useWaitlist();
+  const { isDesktopAlertOpen, desktopAlertToolSlug, closeDesktopOnlyAlert, openWaitlist } = useWaitlist();
 
   if (!isDesktopAlertOpen) return null;
 
@@ -141,7 +141,11 @@ export const DesktopOnlyAlertModal: React.FC = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <button
-            onClick={closeDesktopOnlyAlert}
+            onClick={() => {
+              const targetSlug = tool ? tool.slug : 'all';
+              closeDesktopOnlyAlert();
+              openWaitlist(targetSlug);
+            }}
             className="btn-primary btn-shimmer"
             style={{
               width: '100%',
@@ -151,7 +155,24 @@ export const DesktopOnlyAlertModal: React.FC = () => {
               borderRadius: '12px'
             }}
           >
-            Got It
+            Join Early Access Waitlist ↗
+          </button>
+
+          <button
+            onClick={closeDesktopOnlyAlert}
+            style={{
+              width: '100%',
+              padding: '11px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              borderRadius: '12px',
+              border: '1.5px solid #E2E8F0',
+              background: '#F8FAFC',
+              color: 'var(--ink)',
+              cursor: 'pointer'
+            }}
+          >
+            Got It, Close
           </button>
 
           {tool && (

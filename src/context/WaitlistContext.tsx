@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { WaitlistEntry } from '../types';
 import confetti from 'canvas-confetti';
-import { isMobileViewer } from '../utils/device';
 
 interface WaitlistContextType {
   isOpen: boolean;
@@ -37,10 +36,6 @@ export const WaitlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const openWaitlist = (toolSlug?: string) => {
-    if (toolSlug && toolSlug !== 'all' && isMobileViewer()) {
-      showDesktopOnlyAlert(toolSlug);
-      return;
-    }
     setSelectedToolSlug(toolSlug || null);
     setIsOpen(true);
   };
