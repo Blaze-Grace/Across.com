@@ -152,7 +152,7 @@ export default async (req: Request, context: Context) => {
   const passcodeEnv = Netlify.env.get('ADMIN_PASSCODE') || 'across2026';
 
   try {
-    const store = getStore(STORE_NAME);
+    const store = getStore({ name: STORE_NAME, consistency: 'strong' });
 
     // 1. Founder Authentication Gate
     if (path === '/api/admin/auth' && method === 'POST') {

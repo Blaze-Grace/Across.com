@@ -1,9 +1,11 @@
 {
-  "pageVisits": 1,
-  "toolClicks": {},
+  "pageVisits": 4,
+  "toolClicks": {
+    "converse-qa": 3
+  },
   "sandboxRuns": {},
   "deviceStats": {
-    "desktop": 1,
+    "desktop": 4,
     "mobile": 0
   }
 }

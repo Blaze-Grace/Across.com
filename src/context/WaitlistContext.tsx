@@ -74,7 +74,7 @@ export const WaitlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toolSlug
   }: WaitlistSubmissionPayload): Promise<WaitlistSubmissionResult> => {
     const resolvedToolSlug = toolSlug || (selectedToolSlug && selectedToolSlug !== 'all' ? selectedToolSlug : 'converse-qa');
-    const normalizedCode = code.trim().toUpperCase();
+    const normalizedCode = code.replace(/[\s\u200B-\u200D\uFEFF]/g, '').toUpperCase();
 
     if (!normalizedCode) {
       return {

@@ -85,11 +85,13 @@ export const App: React.FC = () => {
     <CurrencyProvider>
       <WaitlistProvider>
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <Navbar
-            currentView={currentView}
-            onNavigateHome={navigateToHome}
-            onNavigateAdmin={navigateToAdmin}
-          />
+          {currentView !== 'vip-access' && (
+            <Navbar
+              currentView={currentView}
+              onNavigateHome={navigateToHome}
+              onNavigateAdmin={navigateToAdmin}
+            />
+          )}
 
           <div style={{ flex: 1 }}>
             {currentView === 'vip-access' ? (
@@ -105,7 +107,7 @@ export const App: React.FC = () => {
             )}
           </div>
 
-          <Footer />
+          {currentView !== 'vip-access' && <Footer />}
           <WaitlistModal />
           <DesktopOnlyAlertModal />
         </div>
