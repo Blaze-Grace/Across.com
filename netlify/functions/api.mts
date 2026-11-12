@@ -1,4 +1,4 @@
-import type { Config, Context } from '@netlify/functions';
+import type { Context } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'across-data';
@@ -62,7 +62,10 @@ async function readAnalytics(store: ReturnType<typeof getStore>): Promise<Analyt
 
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
-  const path = url.pathname.replace(/\/+$/, '');
+  let path = url.pathname.replace(/\/+$/, '');
+  if (path.startsWith('/.netlify/functions/api')) {
+    path = '/api' + path.slice('/.netlify/functions/api'.length);
+  }
   const method = req.method.toUpperCase();
   const passcodeEnv = Netlify.env.get('ADMIN_PASSCODE') || 'across2026';
 
@@ -236,9 +239,5 @@ export default async (req: Request, context: Context) => {
     console.error('[Netlify API Error]', err);
     return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
-};
-
-export const config: Config = {
-  path: '/api/*',
 };
 
