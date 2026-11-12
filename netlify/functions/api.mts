@@ -158,7 +158,11 @@ export default async (req: Request, context: Context) => {
 
       const entry = {
         id: (body.id as string) || 'wl_' + Date.now(),
-        email: body.email,
+        name: (body.name as string) || null,
+        email: (body.email as string) || null,
+        phone: (body.phone as string) || null,
+        instagram: (body.instagram as string) || null,
+        preferredContact: (body.preferredContact as string) || 'email',
         role: (body.role as string) || 'Other',
         code: (body.code as string) || null,
         toolSlug: (body.toolSlug as string) || 'all',

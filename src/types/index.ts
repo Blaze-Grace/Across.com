@@ -27,7 +27,11 @@ export interface SaaSTool {
 
 export interface WaitlistEntry {
   id: string;
-  email: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  instagram?: string;
+  preferredContact?: 'email' | 'phone' | 'instagram';
   role: string;
   code?: string;
   toolSlug: string;

@@ -214,10 +214,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
       alert('No waitlist signups to export yet.');
       return;
     }
-    const headers = ['Queue Number', 'Email', 'Role', 'Tool Requested', 'VIP Code', 'Status', 'Date', 'IP', 'Device'];
+    const headers = ['Queue Number', 'Name', 'Preferred Contact', 'Email', 'Phone', 'Instagram', 'Role', 'Tool Requested', 'VIP Code', 'Status', 'Date', 'IP', 'Device'];
     const rows = waitlist.map(w => [
       w.queueNumber,
-      `"${w.email}"`,
+      `"${w.name || ''}"`,
+      `"${w.preferredContact || 'email'}"`,
+      `"${w.email || ''}"`,
+      `"${w.phone || ''}"`,
+      `"${w.instagram || ''}"`,
       `"${w.role}"`,
       `"${w.toolSlug}"`,
       `"${w.code || ''}"`,
@@ -296,7 +300,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
     const matchesTool = waitlistToolFilter === 'All' || w.toolSlug === waitlistToolFilter;
     const q = waitlistSearch.toLowerCase();
     const matchesSearch = !q ||
-      w.email.toLowerCase().includes(q) ||
+      (w.name && w.name.toLowerCase().includes(q)) ||
+      (w.email && w.email.toLowerCase().includes(q)) ||
+      (w.phone && w.phone.toLowerCase().includes(q)) ||
+      (w.instagram && w.instagram.toLowerCase().includes(q)) ||
       w.role.toLowerCase().includes(q) ||
       (w.code && w.code.toLowerCase().includes(q));
     return matchesTool && matchesSearch;
@@ -1009,7 +1016,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
                 <thead>
                   <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748B' }}>
                     <th style={{ padding: '12px 16px' }}>Queue #</th>
-                    <th style={{ padding: '12px 16px' }}>Work Email</th>
+                    <th style={{ padding: '12px 16px' }}>Name & Contact</th>
                     <th style={{ padding: '12px 16px' }}>Role / Practice</th>
                     <th style={{ padding: '12px 16px' }}>Tool Requested</th>
                     <th style={{ padding: '12px 16px' }}>VIP Code</th>
@@ -1026,9 +1033,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding 
                         #{entry.queueNumber}
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--ink)' }}>
-                        <a href={`mailto:${entry.email}`} style={{ color: 'inherit', textDecoration: 'none' }} title="Send Email">
-                          {entry.email}
-                        </a>
+                        {entry.name && <div style={{ fontWeight: 800, marginBottom: '2px' }}>{entry.name}</div>}
+                        {entry.email && (
+                          <div>
+                            <a href={`mailto:${entry.email}`} style={{ color: 'var(--blue-primary)', textDecoration: 'none', fontSize: '12.5px' }} title="Send Email">
+                              📧 {entry.email}
+                            </a>
+                          </div>
+                        )}
+                        {entry.phone && (
+                          <div>
+                            <a href={`tel:${entry.phone}`} style={{ color: '#059669', textDecoration: 'none', fontSize: '12.5px' }} title="Call / Phone">
+                              📱 {entry.phone}
+                            </a>
+                          </div>
+                        )}
+                        {entry.instagram && (
+                          <div style={{ color: '#DB2777', fontSize: '12.5px' }}>
+                            📸 {entry.instagram.startsWith('@') ? entry.instagram : `@${entry.instagram}`}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--slate)' }}>
                         {entry.role}

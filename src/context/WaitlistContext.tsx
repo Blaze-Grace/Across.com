@@ -2,12 +2,22 @@ import React, { createContext, useContext, useState } from 'react';
 import { WaitlistEntry } from '../types';
 import confetti from 'canvas-confetti';
 
+export interface WaitlistSubmissionPayload {
+  name: string;
+  email?: string;
+  phone?: string;
+  instagram?: string;
+  preferredContact: 'email' | 'phone' | 'instagram';
+  role: string;
+  code?: string;
+}
+
 interface WaitlistContextType {
   isOpen: boolean;
   selectedToolSlug: string | null;
   openWaitlist: (toolSlug?: string) => void;
   closeWaitlist: () => void;
-  submitWaitlist: (email: string, role: string, code?: string) => Promise<{ success: boolean; queueNumber: number; isVip: boolean }>;
+  submitWaitlist: (payload: WaitlistSubmissionPayload) => Promise<{ success: boolean; queueNumber: number; isVip: boolean }>;
   waitlistCount: number;
   isDesktopAlertOpen: boolean;
   desktopAlertToolSlug: string | null;
@@ -44,13 +54,25 @@ export const WaitlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsOpen(false);
   };
 
-  const submitWaitlist = async (email: string, role: string, code?: string) => {
+  const submitWaitlist = async ({
+    name,
+    email,
+    phone,
+    instagram,
+    preferredContact,
+    role,
+    code
+  }: WaitlistSubmissionPayload) => {
     const isVip = code === 'ACROSSVIP' || code === 'EARLYACCESS';
     let assignedQueue = waitlistCount + 1;
 
     const entry: WaitlistEntry = {
       id: 'wl_' + Date.now(),
-      email,
+      name: name.trim(),
+      email: email?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      instagram: instagram?.trim() || undefined,
+      preferredContact,
       role,
       code,
       toolSlug: selectedToolSlug || 'all',

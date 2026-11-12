@@ -5,7 +5,11 @@ import { getToolGradient } from '../../utils/toolStyles';
 
 export const WaitlistModal: React.FC = () => {
   const { isOpen, closeWaitlist, selectedToolSlug, submitWaitlist } = useWaitlist();
+  const [name, setName] = useState('');
+  const [preferredContact, setPreferredContact] = useState<'email' | 'phone' | 'instagram'>('email');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [instagram, setInstagram] = useState('');
   const [role, setRole] = useState('Solo Consultant / Independent');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -23,13 +27,33 @@ export const WaitlistModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !email.includes('@')) {
-      alert('Please enter a valid work email.');
+    if (!name.trim()) {
+      alert('Please enter your name.');
+      return;
+    }
+    if (preferredContact === 'email' && (!email.trim() || !email.includes('@'))) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    if (preferredContact === 'phone' && phone.trim().length < 7) {
+      alert('Please enter a valid phone number.');
+      return;
+    }
+    if (preferredContact === 'instagram' && !instagram.trim()) {
+      alert('Please enter your Instagram handle.');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await submitWaitlist(email, role, code.trim().toUpperCase());
+      const res = await submitWaitlist({
+        name: name.trim(),
+        email: preferredContact === 'email' ? email.trim() : email.trim() || undefined,
+        phone: preferredContact === 'phone' ? phone.trim() : phone.trim() || undefined,
+        instagram: preferredContact === 'instagram' ? instagram.trim() : instagram.trim() || undefined,
+        preferredContact,
+        role,
+        code: code.trim().toUpperCase()
+      });
       setResult({ queueNumber: res.queueNumber, isVip: res.isVip });
     } finally {
       setSubmitting(false);
@@ -38,7 +62,11 @@ export const WaitlistModal: React.FC = () => {
 
   const handleClose = () => {
     setResult(null);
+    setName('');
     setEmail('');
+    setPhone('');
+    setInstagram('');
+    setPreferredContact('email');
     setCode('');
     closeWaitlist();
   };
@@ -143,13 +171,13 @@ export const WaitlistModal: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '5px', color: 'var(--ink)' }}>
-                  Work Email <span style={{ color: '#EF4444' }}>*</span>
+                  Your Name <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
                   required
                   className="modal-input"
                   style={{
@@ -161,6 +189,98 @@ export const WaitlistModal: React.FC = () => {
                     outline: 'none'
                   }}
                 />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: 'var(--ink)' }}>
+                  How should we contact you? <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '10px' }}>
+                  {[
+                    { id: 'email' as const, label: '📧 Email' },
+                    { id: 'phone' as const, label: '📱 Phone' },
+                    { id: 'instagram' as const, label: '📸 Instagram' }
+                  ].map((opt) => {
+                    const active = preferredContact === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setPreferredContact(opt.id)}
+                        style={{
+                          padding: '9px 8px',
+                          borderRadius: '10px',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: active ? '1.5px solid var(--blue-primary)' : '1px solid #CBD5E1',
+                          background: active ? '#EFF6FF' : '#F8FAFC',
+                          color: active ? 'var(--blue-primary)' : 'var(--slate)',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {preferredContact === 'email' && (
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    required
+                    className="modal-input"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '14px',
+                      outline: 'none'
+                    }}
+                  />
+                )}
+
+                {preferredContact === 'phone' && (
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    required
+                    className="modal-input"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '14px',
+                      outline: 'none'
+                    }}
+                  />
+                )}
+
+                {preferredContact === 'instagram' && (
+                  <input
+                    type="text"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                    placeholder="@yourinstagram"
+                    required
+                    className="modal-input"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '14px',
+                      outline: 'none'
+                    }}
+                  />
+                )}
               </div>
 
               <div style={{ marginBottom: '14px' }}>

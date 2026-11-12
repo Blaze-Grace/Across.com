@@ -175,7 +175,11 @@ app.post('/api/waitlist', (req, res) => {
 
     const entry = {
       id: body.id || 'wl_' + Date.now(),
-      email: body.email,
+      name: body.name || null,
+      email: body.email || null,
+      phone: body.phone || null,
+      instagram: body.instagram || null,
+      preferredContact: body.preferredContact || 'email',
       role: body.role || 'Other',
       code: body.code || null,
       toolSlug: body.toolSlug || 'all',
